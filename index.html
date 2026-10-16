@@ -92,7 +92,7 @@
 
         #app-container { display: flex; width: 100%; height: 100vh; background: #f1f5f9; }
         
-        aside { width: 260px; background: #0f172a; color: #cbd5e1; display: flex; flex-direction: column; justify-space-between; overflow-y: auto; }
+        aside { width: 260px; background: #0f172a; color: #cbd5e1; display: flex; flex-direction: column; justify-content: space-between; overflow-y: auto; }
         .sidebar-header { padding: 20px; font-size: 16px; font-weight: bold; background: #020617; color: white; display: flex; align-items: center; gap: 10px; }
         nav { padding: 12px; display: flex; flex-direction: column; gap: 4px; }
         
@@ -109,6 +109,8 @@
 
         .sidebar-footer { padding: 15px 20px; background: #020617; display: flex; justify-content: space-between; align-items: center; font-size: 12px; border-top: 1px solid #1e293b; }
         .btn-logout { background: none; border: none; color: #f87171; font-weight: bold; cursor: pointer; }
+        .btn-logout-top { background: #fee2e2; color: #b91c1c; border: 1px solid #fecaca; padding: 4px 10px; border-radius: 6px; font-weight: bold; font-size: 12px; cursor: pointer; transition: 0.2s; }
+        .btn-logout-top:hover { background: #fecaca; }
 
         .main-content { flex: 1; display: flex; flex-direction: column; overflow-y: auto; }
         
@@ -126,7 +128,7 @@
             box-shadow: 0 1px 2px rgba(0,0,0,0.02);
         }
 
-        .user-badge { display: flex; align-items: center; gap: 10px; background: #f8fafc; padding: 6px 12px; border-radius: 20px; border: 1px solid #e2e8f0; }
+        .user-badge { display: flex; align-items: center; gap: 12px; background: #f8fafc; padding: 6px 14px; border-radius: 20px; border: 1px solid #e2e8f0; }
         .avatar { width: 28px; height: 28px; background: #2563eb; color: white; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-weight: bold; font-size: 12px; }
 
         main { padding: 24px; }
@@ -271,17 +273,20 @@
                 </nav>
             </div>
             <div class="sidebar-footer">
-                <span id="sidebar-user-role">Role: Cashier</span>
-                <button onclick="handleLogout()" class="btn-logout">Logout</button>
+                <span id="sidebar-user-role" style="font-size: 11px; color: #94a3b8;">Kitengo System v5</span>
+                <span style="font-size: 11px; color: #34d399; font-weight: bold;">● Online</span>
             </div>
         </aside>
 
         <div class="main-content">
             <header>
                 <h2 style="font-size: 15px; font-weight: 900; background: linear-gradient(135deg, #7c3aed 0%, #db2777 50%, #f59e0b 100%); -webkit-background-clip: text; -webkit-text-fill-color: transparent; letter-spacing: 0.5px; font-family: 'Georgia', serif; font-style: italic;">✨ KITENGO BAR & RESTAURANT DIGITAL BILLING SYSTEM ✨</h2>
-                <div class="user-badge">
-                    <div class="avatar" id="user-initial">A</div>
-                    <span style="font-size: 13px; font-weight: 600;" id="current-username-display">Admin</span>
+                <div style="display: flex; align-items: center; gap: 16px;">
+                    <div class="user-badge">
+                        <div class="avatar" id="user-initial">A</div>
+                        <span style="font-size: 13px; font-weight: 600;" id="current-username-display">Admin</span>
+                    </div>
+                    <button onclick="handleLogout()" class="btn-logout-top">🚪 Logout</button>
                 </div>
             </header>
 
@@ -896,13 +901,14 @@
 
                     <div class="card" style="margin-top: 24px;">
                         <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px;">
-                            <h3 style="margin-bottom:0; border:none;">Watumiaji Wote, Ruhusa za Stock na Mshahara</h3>
+                            <h3 style="margin-bottom:0; border:none;">Watumiaji Wote, Namba & Idhini za Mfumo (<span id="total-users-counter">0</span>)</h3>
                             <button onclick="loadUsersList()" style="padding: 8px 16px; background: #334155; color: white; border: none; border-radius: 6px; cursor: pointer; font-size: 13px;">Onyesha Wote</button>
                         </div>
                         <table>
                             <thead>
                                 <tr>
-                                    <th>Jina</th>
+                                    <th>No.</th>
+                                    <th>Jina (Username)</th>
                                     <th>Password</th>
                                     <th>Role</th>
                                     <th>Basic Salary</th>
@@ -962,8 +968,6 @@
             if(document.getElementById('hist_end_date')) document.getElementById('hist_end_date').value = todayStr;
             
             await loadFinancialCardsFromCloud();
-
-            // Load Store Cart & Fridge Carts from Cloud
             await loadStoreCartFromCloud();
             await loadFridgesCartsFromCloud();
 
@@ -993,7 +997,6 @@
             const el = document.getElementById(cardId);
             if(!el) return;
             const val = parseFloat(el.value) || 0;
-            
             let cardKey = cardId.replace('card_', '');
             
             try {
@@ -1115,7 +1118,6 @@
                 document.getElementById('current-username-display').innerText = currentUser.username;
                 document.getElementById('user-initial').innerText = currentUser.username.charAt(0).toUpperCase();
                 document.getElementById('pos_cashier').value = currentUser.username;
-                document.getElementById('sidebar-user-role').innerText = 'Role: ' + currentUser.role;
 
                 const isAdmin = currentUser.role.toLowerCase() === 'admin';
                 const canManageStock = currentUser.can_manage_stock || isAdmin;
@@ -1147,6 +1149,7 @@
                 handleFridgeSelectionChange();
                 renderStoreCart();
                 loadFinancialCardsFromCloud();
+                if(isAdmin) loadUsersList();
             }
         }
 
@@ -2203,7 +2206,6 @@
                     body: JSON.stringify(payload)
                 });
 
-                // Save Sale Record to Cloud (Supabase)
                 let totalCartAmt = 0;
                 cartItems.forEach(i => totalCartAmt += (i.quantity * i.unit_price));
                 await apiCall('/api/sales/save', {
@@ -2395,7 +2397,7 @@ Malipo: ${paymentType}
                 return parseFloat(el.value) || 0;
             };
 
-            const madeniWateja = parseFloat((document.getElementById('stat-system-debts').innerText || '0').replace(/[^\d]/g, '')) || 0;
+            const madeniWateja = parseFloat((document.getElementById('stat-system-debts').innerText || '0').replace(/\D/g, '')) || 0;
             const store = getVal('card_store');
             const fridgeCoca = getVal('card_fridge_coca');
             const freezer = getVal('card_freezer');
@@ -2413,7 +2415,7 @@ Malipo: ${paymentType}
             if(tbody) {
                 const totalCells = tbody.querySelectorAll('[id^="p_total_cell_"]');
                 totalCells.forEach(cell => {
-                    const val = parseFloat((cell.innerText || '0').replace(/[^\d]/g, '')) || 0;
+                    const val = parseFloat((cell.innerText || '0').replace(/\D/g, '')) || 0;
                     stockCheckTableTotal += val;
                 });
             }
@@ -2503,10 +2505,6 @@ Malipo: ${paymentType}
             const profitCell = document.getElementById(`p_profit_cell_${id}`);
             if(profitCell) profitCell.innerText = 'TZS ' + estProfit.toLocaleString();
 
-            updateStockCheckSummaryTotalsLive();
-        }
-
-        function updateStockCheckSummaryTotalsLive() {
             calculateLiveJumlaYaMtaji();
         }
 
@@ -2991,8 +2989,13 @@ Malipo: ${paymentType}
                 const tbody = document.getElementById('users-tbody');
                 if(!tbody) return;
                 tbody.innerHTML = '';
-                if(json.data) {
-                    json.data.forEach(u => {
+                
+                const usersList = json.data || [];
+                const counterSpan = document.getElementById('total-users-counter');
+                if(counterSpan) counterSpan.innerText = usersList.length;
+
+                if(usersList.length > 0) {
+                    usersList.forEach((u, index) => {
                         const statusBadge = u.status === 'Blocked' ? '<span style="background:#fee2e2; color:#b91c1c; padding:2px 6px; border-radius:4px; font-size:11px; font-weight:bold;">Blocked</span>' : '<span style="background:#dcfce7; color:#15803d; padding:2px 6px; border-radius:4px; font-size:11px; font-weight:bold;">Active</span>';
                         const blockBtnText = u.status === 'Blocked' ? 'Fungua' : 'Funga';
                         const blockBtnClass = u.status === 'Blocked' ? 'btn-unblock' : 'btn-block';
@@ -3005,6 +3008,7 @@ Malipo: ${paymentType}
 
                         tbody.innerHTML += `
                             <tr>
+                                <td style="font-weight: bold; color: #475569; text-align: center;">${index + 1}</td>
                                 <td style="font-weight: 500;">${u.username}</td>
                                 <td style="font-family: monospace; font-weight: bold; color: #2563eb;">${u.password || 'gilberto'}</td>
                                 <td><span style="background: #e0f2fe; color: #0369a1; padding: 2px 8px; border-radius: 4px; font-size: 11px; font-weight: bold;">${u.role}</span></td>
@@ -3021,6 +3025,8 @@ Malipo: ${paymentType}
                                 </td>
                             </tr>`;
                     });
+                } else {
+                    tbody.innerHTML = `<tr><td colspan="10" style="text-align: center; color: #64748b;">Hakuna watumiaji waliopatikana.</td></tr>`;
                 }
             } catch(e) { console.error(e); }
         }
