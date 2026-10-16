@@ -139,16 +139,19 @@
         th, td { padding: 8px 10px; text-align: left; border: 1px solid #e2e8f0; font-size: 12.5px; }
         th { background: #f8fafc; font-weight: 600; color: #475569; position: sticky; top: 0; z-index: 10; white-space: nowrap; }
         
+        /* Compact Formatting for POS Cart, Stock Check & History Tables */
+        #cart-table-main th, #cart-table-main td,
         #stock-check-table th, #stock-check-table td,
         #stock-history-table th, #stock-history-table td,
         #store-cart-table th, #store-cart-table td,
         #fridge-cart-table th, #fridge-cart-table td {
-            padding: 2px 4px !important;
-            font-size: 11.5px !important;
-            height: 22px !important;
+            padding: 3px 6px !important;
+            font-size: 12px !important;
+            height: 24px !important;
             vertical-align: middle !important;
             white-space: nowrap !important;
         }
+        
         #stock-check-table input, #store-cart-table input, #fridge-cart-table input {
             padding: 1px 4px !important;
             height: 20px !important;
@@ -177,8 +180,8 @@
         .btn-block { background: #fef3c7; color: #d97706; }
         .btn-unblock { background: #dcfce7; color: #15803d; }
         .btn-del { background: #fee2e2; color: #b91c1c; }
-        .btn-qty-add { background: #dcfce7; color: #15803d; width: 22px; height: 22px; border-radius: 3px; border: none; font-weight: bold; cursor: pointer; }
-        .btn-qty-sub { background: #fef3c7; color: #d97706; width: 22px; height: 22px; border-radius: 3px; border: none; font-weight: bold; cursor: pointer; }
+        .btn-qty-add { background: #dcfce7; color: #15803d; width: 24px; height: 22px; border-radius: 3px; border: 1px solid #bbf7d0; font-weight: bold; cursor: pointer; font-size: 13px; line-height: 1; }
+        .btn-qty-sub { background: #fef3c7; color: #d97706; width: 24px; height: 22px; border-radius: 3px; border: 1px solid #fde68a; font-weight: bold; cursor: pointer; font-size: 13px; line-height: 1; }
 
         .financial-card { background: #f8fafc; border: 1px solid #e2e8f0; padding: 12px 16px; border-radius: 8px; font-size: 13px; font-weight: 600; display: flex; flex-direction: column; gap: 4px; }
         .financial-card input { padding: 6px 8px; border: 1px solid #cbd5e1; border-radius: 6px; font-size: 13px; width: 100%; }
@@ -309,15 +312,15 @@
 
                         <div style="margin-top: 10px;">
                             <h4 style="font-size: 14px; font-weight: bold; margin-bottom: 8px; color: #334155;">Orodha kwenye Kikapu (Cart)</h4>
-                            <div style="max-height: 200px; overflow-y: auto; border: 1px solid #e2e8f0; border-radius: 8px;">
-                                <table>
+                            <div class="table-scroll-container" style="max-height: 220px;">
+                                <table id="cart-table-main">
                                     <thead>
                                         <tr>
-                                            <th>Bidhaa</th>
-                                            <th>Idadi</th>
-                                            <th>Bei</th>
-                                            <th>Jumla</th>
-                                            <th>Ongeza / Punguza</th>
+                                            <th style="width: 38%;">Bidhaa</th>
+                                            <th style="width: 12%; text-align: center;">Idadi</th>
+                                            <th style="width: 20%;">Bei</th>
+                                            <th style="width: 20%;">Jumla</th>
+                                            <th style="width: 10%; text-align: center;">Ongeza / Punguza</th>
                                         </tr>
                                     </thead>
                                     <tbody id="cart-tbody">
@@ -1888,63 +1891,58 @@
             selectedProductPriceCache = Math.round(price);
         }
 
-        async function adjustStoreStockRealtime(productName, qtyChange) {
-            try {
-                const res = await apiCall('/api/pos/cart/adjust-stock', {
-                    method: 'POST',
-                    headers: {'Content-Type': 'application/json'},
-                    body: JSON.stringify({ product_name: productName, quantity_change: qtyChange })
-                });
-                await loadProductsCache();
-                return res.new_stock;
-            } catch(e) {
-                alert('⚠️ ' + e.message);
-                throw e;
-            }
+        // Fast Background Stock Adjust (Non-blocking)
+        function adjustStoreStockRealtime(productName, qtyChange) {
+            apiCall('/api/pos/cart/adjust-stock', {
+                method: 'POST',
+                headers: {'Content-Type': 'application/json'},
+                body: JSON.stringify({ product_name: productName, quantity_change: qtyChange })
+            }).then(() => loadProductsCache()).catch(e => console.error(e));
         }
 
         async function addItemToCart() {
-            const pname = toProperCase(document.getElementById('pos_product_search').value);
+            const rawName = document.getElementById('pos_product_search').value.trim();
+            const pname = toProperCase(rawName);
             let qty = parseInt(document.getElementById('pos_qty').value) || 0;
             if(qty < 0) qty = 0;
 
             if(!pname) { alert('Chagua bidhaa kwanza!'); return; }
-            if(qty <= 0) { alert('Weka idadi sahihi (haiwezi kuwa chini ya 0)!'); return; }
+            if(qty <= 0) { alert('Weka idadi sahihi!'); return; }
 
             if(currentProductsData.length === 0) {
                 await loadProductsCache();
             }
 
-            const productRef = currentProductsData.find(p => toProperCase(p.product_name) === pname);
+            // Case-insensitive product search logic
+            const targetLower = pname.toLowerCase();
+            const productRef = currentProductsData.find(p => p.product_name && p.product_name.trim().toLowerCase() === targetLower);
+            
             if(!productRef) {
-                alert('Bidhaa hii haipo kwenye mfumo au imeondolewa!');
+                alert(`Bidhaa '${pname}' haijapatikana kwenye mfumo! Hakikisha umechagua kutoka kwenye orodha.`);
                 return;
             }
 
             const availableStock = Number(productRef.stock_quantity || 0);
             if(qty > availableStock) {
-                alert(`❌ Stock haitoshi! Bidhaa '${pname}' ina stock ya chupa ${availableStock} tu.`);
-                return;
-            }
-
-            try {
-                await adjustStoreStockRealtime(pname, qty);
-            } catch(e) {
+                alert(`❌ Stock haitoshi! Bidhaa '${productRef.product_name}' ina stock ya chupa ${availableStock} tu.`);
                 return;
             }
 
             const price = Math.round(selectedProductPriceCache || Number(productRef.selling_price || 0));
-            const existingIndex = cartItems.findIndex(item => item.product_name === pname);
+            const existingIndex = cartItems.findIndex(item => item.product_name.toLowerCase() === productRef.product_name.trim().toLowerCase());
 
             if(existingIndex >= 0) {
                 cartItems[existingIndex].quantity += qty;
             } else {
                 cartItems.push({
-                    product_name: pname,
+                    product_name: toProperCase(productRef.product_name),
                     quantity: qty,
                     unit_price: price
                 });
             }
+
+            // Fire background stock update for instant responsiveness
+            adjustStoreStockRealtime(productRef.product_name, qty);
 
             document.getElementById('pos_product_search').value = '';
             document.getElementById('pos_qty').value = '1';
@@ -1957,31 +1955,22 @@
             }
         }
 
-        async function updateCartQty(index, change) {
+        function updateCartQty(index, change) {
             if(cartItems[index]) {
                 const pname = cartItems[index].product_name;
                 let newQty = cartItems[index].quantity + change;
-                if(newQty < 0) newQty = 0;
                 
                 if(newQty > 0) {
-                    if(change > 0) {
-                        try {
-                            await adjustStoreStockRealtime(pname, 1);
-                        } catch(e) { return; }
-                    } else {
-                        try {
-                            await adjustStoreStockRealtime(pname, -1);
-                        } catch(e) { return; }
-                    }
                     cartItems[index].quantity = newQty;
+                    adjustStoreStockRealtime(pname, change);
                 } else {
                     const fullQtyToReturn = cartItems[index].quantity;
-                    try {
-                        await adjustStoreStockRealtime(pname, -fullQtyToReturn);
-                    } catch(e) { return; }
+                    adjustStoreStockRealtime(pname, -fullQtyToReturn);
                     cartItems.splice(index, 1);
                 }
             }
+            
+            // Ultra-fast immediate render on button click
             renderCart();
             
             if(currentActivePendingBillId) {
@@ -2010,10 +1999,10 @@
                 tbody.innerHTML += `
                     <tr>
                         <td style="font-weight: 500;">${item.product_name}</td>
-                        <td style="font-weight: bold; color: #2563eb;">${item.quantity}</td>
+                        <td style="font-weight: bold; color: #2563eb; text-align: center;">${item.quantity}</td>
                         <td>TZS ${Math.round(item.unit_price).toLocaleString()}</td>
                         <td style="font-weight: bold; color: #059669;">TZS ${itemTotal.toLocaleString()}</td>
-                        <td>
+                        <td style="text-align: center;">
                             <button onclick="updateCartQty(${idx}, 1)" class="btn-qty-add">+</button>
                             <button onclick="updateCartQty(${idx}, -1)" class="btn-qty-sub">-</button>
                         </td>
@@ -2143,7 +2132,7 @@
             if(paidInput) paidInput.value = billTotal;
 
             calculateChenjiPreview();
-            alert(`Bili ya '${bill.customer_name}' imefunguliwa kwenye Cart! (Stock ilishapunguzwa wakati wa kuweka)`);
+            alert(`Bili ya '${bill.customer_name}' imefunguliwa kwenye Cart!`);
         }
 
         async function deletePendingBill(billId) {
@@ -2284,8 +2273,8 @@ Malipo: ${paymentType}
             if(sellPrice < 0) sellPrice = 0;
 
             if(!pName) { alert('Weka jina la bidhaa!'); return; }
-            if(qty <= 0) { alert('Weka idadi ya chupa za kuanzia (haziwezi kuwa chini ya 0)!'); return; }
-            if(totalBuy <= 0) { alert('Weka jumla ya gharama uliyolipa (haziwezi kuwa chini ya 0)!'); return; }
+            if(qty <= 0) { alert('Weka idadi ya chupa za kuanzia!'); return; }
+            if(totalBuy <= 0) { alert('Weka jumla ya gharama uliyolipa!'); return; }
 
             const unitBuyingPrice = totalBuy / qty;
 
@@ -2322,7 +2311,7 @@ Malipo: ${paymentType}
             if(totalCostInput < 0) totalCostInput = 0;
 
             if(!prodName) { alert('Chagua au weka jina la bidhaa!'); return; }
-            if(!addedQty || addedQty <= 0) { alert('Weka idadi sahihi ya chupa za kuongeza (haziwezi kuwa chini ya 0)!'); return; }
+            if(!addedQty || addedQty <= 0) { alert('Weka idadi sahihi ya chupa za kuongeza!'); return; }
 
             let unitBuyingPrice = 0;
             if(!isNaN(totalCostInput) && totalCostInput > 0) {
@@ -2889,7 +2878,7 @@ Malipo: ${paymentType}
             const amountInput = document.getElementById(`pay_amt_${customerId}`);
             let amount = Math.round(parseFloat(amountInput.value) || 0);
             if(amount < 0) amount = 0;
-            if(!amount || amount <= 0) { alert('Weka kiasi sahihi cha fedha (kianzie 0 kuendelea)!'); return; }
+            if(!amount || amount <= 0) { alert('Weka kiasi sahihi cha fedha!'); return; }
 
             if(amount > maxDebt) {
                 alert(`⚠️ Kiasi ulichoweka (TZS ${amount.toLocaleString()}) kimezidi deni analodaiwa (TZS ${maxDebt.toLocaleString()}). Mfumo umezima na kuchukua kiasi kamili cha deni.`);
