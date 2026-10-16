@@ -92,7 +92,7 @@
 
         #app-container { display: flex; width: 100%; height: 100vh; background: #f1f5f9; }
         
-        aside { width: 260px; background: #0f172a; color: #cbd5e1; display: flex; flex-direction: column; justify-content: space-between; overflow-y: auto; }
+        aside { width: 260px; background: #0f172a; color: #cbd5e1; display: flex; flex-direction: column; justify-space-between; overflow-y: auto; }
         .sidebar-header { padding: 20px; font-size: 16px; font-weight: bold; background: #020617; color: white; display: flex; align-items: center; gap: 10px; }
         nav { padding: 12px; display: flex; flex-direction: column; gap: 4px; }
         
@@ -618,19 +618,19 @@
                             <div class="row-4-cards">
                                 <div class="writable-card card-col-store">
                                     <span>Store:</span>
-                                    <input type="number" id="card_store" min="0" placeholder="0" oninput="enforceNonNegative(this); calculateLiveJumlaYaMtaji()">
+                                    <input type="number" id="card_store" min="0" placeholder="0" onchange="syncSingleCardToCloud('card_store')" oninput="enforceNonNegative(this); calculateLiveJumlaYaMtaji()">
                                 </div>
                                 <div class="writable-card card-col-fridge">
                                     <span>Fridge Coca:</span>
-                                    <input type="number" id="card_fridge_coca" min="0" placeholder="0" oninput="enforceNonNegative(this); calculateLiveJumlaYaMtaji()">
+                                    <input type="number" id="card_fridge_coca" min="0" placeholder="0" onchange="syncSingleCardToCloud('card_fridge_coca')" oninput="enforceNonNegative(this); calculateLiveJumlaYaMtaji()">
                                 </div>
                                 <div class="writable-card card-col-freezer">
                                     <span>Freezer:</span>
-                                    <input type="number" id="card_freezer" min="0" placeholder="0" oninput="enforceNonNegative(this); calculateLiveJumlaYaMtaji()">
+                                    <input type="number" id="card_freezer" min="0" placeholder="0" onchange="syncSingleCardToCloud('card_freezer')" oninput="enforceNonNegative(this); calculateLiveJumlaYaMtaji()">
                                 </div>
                                 <div class="writable-card card-col-guinness">
                                     <span>Guinness:</span>
-                                    <input type="number" id="card_guinness" min="0" placeholder="0" oninput="enforceNonNegative(this); calculateLiveJumlaYaMtaji()">
+                                    <input type="number" id="card_guinness" min="0" placeholder="0" onchange="syncSingleCardToCloud('card_guinness')" oninput="enforceNonNegative(this); calculateLiveJumlaYaMtaji()">
                                 </div>
                             </div>
 
@@ -638,19 +638,19 @@
                             <div class="row-4-cards">
                                 <div class="writable-card card-col-cash">
                                     <span>💵 Cash:</span>
-                                    <input type="number" id="card_cash" min="0" placeholder="0" oninput="enforceNonNegative(this); calculateLiveJumlaYaMtaji()">
+                                    <input type="number" id="card_cash" min="0" placeholder="0" onchange="syncSingleCardToCloud('card_cash')" oninput="enforceNonNegative(this); calculateLiveJumlaYaMtaji()">
                                 </div>
                                 <div class="writable-card card-col-voda">
                                     <span>📱 Lipa-Voda:</span>
-                                    <input type="number" id="card_lipa_voda" min="0" placeholder="0" oninput="enforceNonNegative(this); calculateLiveJumlaYaMtaji()">
+                                    <input type="number" id="card_lipa_voda" min="0" placeholder="0" onchange="syncSingleCardToCloud('card_lipa_voda')" oninput="enforceNonNegative(this); calculateLiveJumlaYaMtaji()">
                                 </div>
                                 <div class="writable-card card-col-yas">
                                     <span>📲 Lipa-Yas:</span>
-                                    <input type="number" id="card_lipa_yas" min="0" placeholder="0" oninput="enforceNonNegative(this); calculateLiveJumlaYaMtaji()">
+                                    <input type="number" id="card_lipa_yas" min="0" placeholder="0" onchange="syncSingleCardToCloud('card_lipa_yas')" oninput="enforceNonNegative(this); calculateLiveJumlaYaMtaji()">
                                 </div>
                                 <div class="writable-card card-col-debt">
                                     <span>📋 General-Debt:</span>
-                                    <input type="number" id="card_general_debt" min="0" placeholder="0" oninput="enforceNonNegative(this); calculateLiveJumlaYaMtaji()">
+                                    <input type="number" id="card_general_debt" min="0" placeholder="0" onchange="syncSingleCardToCloud('card_general_debt')" oninput="enforceNonNegative(this); calculateLiveJumlaYaMtaji()">
                                 </div>
                             </div>
                         </div>
@@ -961,9 +961,9 @@
             if(document.getElementById('hist_start_date')) document.getElementById('hist_start_date').value = firstDayStr;
             if(document.getElementById('hist_end_date')) document.getElementById('hist_end_date').value = todayStr;
             
-            loadSavedCardsData();
+            await loadFinancialCardsFromCloud();
 
-            // Load Store Cart from Supabase or Fallback
+            // Load Store Cart & Fridge Carts from Cloud
             await loadStoreCartFromCloud();
             await loadFridgesCartsFromCloud();
 
@@ -971,35 +971,39 @@
             loadProductsCache();
         });
 
-        function saveCardsDataToStorage() {
-            const data = {
-                store: document.getElementById('card_store').value,
-                fridge_coca: document.getElementById('card_fridge_coca').value,
-                freezer: document.getElementById('card_freezer').value,
-                guinness: document.getElementById('card_guinness').value,
-                cash: document.getElementById('card_cash').value,
-                lipa_voda: document.getElementById('card_lipa_voda').value,
-                lipa_yas: document.getElementById('card_lipa_yas').value,
-                general_debt: document.getElementById('card_general_debt').value
-            };
-            localStorage.setItem('kitengo_financial_cards_data', JSON.stringify(data));
+        // --- GLOBAL CLOUD CARDS SYNC (SUPABASE) ---
+        async function loadFinancialCardsFromCloud() {
+            try {
+                const res = await apiCall('/api/financial-cards/get');
+                if(res && res.data) {
+                    const data = res.data;
+                    if(document.getElementById('card_store')) document.getElementById('card_store').value = data.store || 0;
+                    if(document.getElementById('card_fridge_coca')) document.getElementById('card_fridge_coca').value = data.fridge_coca || 0;
+                    if(document.getElementById('card_freezer')) document.getElementById('card_freezer').value = data.freezer || 0;
+                    if(document.getElementById('card_guinness')) document.getElementById('card_guinness').value = data.guinness || 0;
+                    if(document.getElementById('card_cash')) document.getElementById('card_cash').value = data.cash || 0;
+                    if(document.getElementById('card_lipa_voda')) document.getElementById('card_lipa_voda').value = data.lipa_voda || 0;
+                    if(document.getElementById('card_lipa_yas')) document.getElementById('card_lipa_yas').value = data.lipa_yas || 0;
+                    if(document.getElementById('card_general_debt')) document.getElementById('card_general_debt').value = data.general_debt || 0;
+                }
+            } catch(e) { console.error("Error loading cloud cards:", e); }
         }
 
-        function loadSavedCardsData() {
-            const saved = localStorage.getItem('kitengo_financial_cards_data');
-            if(saved) {
-                try {
-                    const data = JSON.parse(saved);
-                    if(document.getElementById('card_store')) document.getElementById('card_store').value = data.store || '';
-                    if(document.getElementById('card_fridge_coca')) document.getElementById('card_fridge_coca').value = data.fridge_coca || '';
-                    if(document.getElementById('card_freezer')) document.getElementById('card_freezer').value = data.freezer || '';
-                    if(document.getElementById('card_guinness')) document.getElementById('card_guinness').value = data.guinness || '';
-                    if(document.getElementById('card_cash')) document.getElementById('card_cash').value = data.cash || '';
-                    if(document.getElementById('card_lipa_voda')) document.getElementById('card_lipa_voda').value = data.lipa_voda || '';
-                    if(document.getElementById('card_lipa_yas')) document.getElementById('card_lipa_yas').value = data.lipa_yas || '';
-                    if(document.getElementById('card_general_debt')) document.getElementById('card_general_debt').value = data.general_debt || '';
-                } catch(e) {}
-            }
+        async function syncSingleCardToCloud(cardId) {
+            const el = document.getElementById(cardId);
+            if(!el) return;
+            const val = parseFloat(el.value) || 0;
+            
+            let cardKey = cardId.replace('card_', '');
+            
+            try {
+                await apiCall('/api/financial-cards/update', {
+                    method: 'POST',
+                    headers: {'Content-Type': 'application/json'},
+                    body: JSON.stringify({ card_key: cardKey, amount: val })
+                });
+                calculateLiveJumlaYaMtaji();
+            } catch(e) { console.error("Error updating cloud card:", e); }
         }
 
         function enforceNonNegative(input) {
@@ -1142,6 +1146,7 @@
                 loadProductsCache();
                 handleFridgeSelectionChange();
                 renderStoreCart();
+                loadFinancialCardsFromCloud();
             }
         }
 
@@ -1332,7 +1337,7 @@
             alert('📂 Bili iliyohifadhiwa ya Store imefunguliwa!');
         }
 
-        function submitStoreToCard() {
+        async function submitStoreToCard() {
             let total = 0;
             storeCartItems.forEach(i => total += Math.round(i.quantity * i.unit_price));
             if(total === 0) { alert('Cart ya Store iko wazi!'); return; }
@@ -1340,10 +1345,9 @@
             const cardInput = document.getElementById('card_store');
             if(cardInput) {
                 cardInput.value = total;
-                saveCardsDataToStorage();
-                calculateLiveJumlaYaMtaji();
+                await syncSingleCardToCloud('card_store');
             }
-            alert(`✅ Rekodi ya Store ya TZS ${total.toLocaleString()} imewekwa kwenye Kadi ya Store!`);
+            alert(`✅ Rekodi ya Store ya TZS ${total.toLocaleString()} imewekwa kwenye Kadi ya Store mtandaoni!`);
         }
 
         // --- FRIDGES POS CLOUD SYNC ---
@@ -1536,7 +1540,7 @@
             alert(`📂 Bili iliyohifadhiwa ya ${currentFridge} imefunguliwa!`);
         }
 
-        function submitFridgeToCard() {
+        async function submitFridgeToCard() {
             let total = 0;
             fridgeCartItems.forEach(i => total += Math.round(i.quantity * i.unit_price));
             if(total === 0) { alert('Cart ya Fridge iko wazi!'); return; }
@@ -1550,10 +1554,9 @@
             const cardInput = document.getElementById(cardId);
             if(cardInput) {
                 cardInput.value = total;
-                saveCardsDataToStorage();
-                calculateLiveJumlaYaMtaji();
+                await syncSingleCardToCloud(cardId);
             }
-            alert(`✅ Total ya TZS ${total.toLocaleString()} imewekwa kwenye kadi ya '${target}'!`);
+            alert(`✅ Total ya TZS ${total.toLocaleString()} imewekwa mtandaoni kwenye kadi ya '${target}'!`);
         }
 
         window.addEventListener('click', function(e) {
@@ -2353,6 +2356,8 @@ Malipo: ${paymentType}
 
         async function loadStockCheckData() {
             try {
+                await loadFinancialCardsFromCloud();
+
                 const [prodRes, custRes] = await Promise.all([
                     apiCall('/api/products'),
                     apiCall('/api/customers')
@@ -2384,8 +2389,6 @@ Malipo: ${paymentType}
         }
 
         function calculateLiveJumlaYaMtaji() {
-            saveCardsDataToStorage();
-
             const getVal = (id) => {
                 const el = document.getElementById(id);
                 if(!el) return 0;
