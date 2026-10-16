@@ -1064,7 +1064,19 @@
                     throw new Error(text || "Hitilafu isiyotarajiwa imetokea kwenye Server.");
                 }
                 if(!res.ok) {
-                    throw new Error(json.detail || json.message || "Imeshindikana kukamilisha ombi.");
+                    let errMsg = "Imeshindikana kukamilisha ombi.";
+                    if (json.detail) {
+                        if (Array.isArray(json.detail)) {
+                            errMsg = json.detail.map(err => `${err.loc ? err.loc.join('.') + ': ' : ''}${err.msg}`).join(', ');
+                        } else if (typeof json.detail === 'object') {
+                            errMsg = JSON.stringify(json.detail);
+                        } else {
+                            errMsg = json.detail;
+                        }
+                    } else if (json.message) {
+                        errMsg = json.message;
+                    }
+                    throw new Error(errMsg);
                 }
                 return json;
             } catch(e) {
@@ -2203,14 +2215,6 @@
                     method: 'POST',
                     headers: {'Content-Type': 'application/json'},
                     body: JSON.stringify(payload)
-                });
-
-                let totalCartAmt = 0;
-                cartItems.forEach(i => totalCartAmt += (i.quantity * i.unit_price));
-                await apiCall('/api/sales/save', {
-                    method: 'POST',
-                    headers: {'Content-Type': 'application/json'},
-                    body: JSON.stringify({ items: cartItems, total_amount: totalCartAmt, payment_method: paymentType })
                 });
 
                 let itemsReceiptStr = "";
