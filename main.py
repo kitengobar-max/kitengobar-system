@@ -77,7 +77,7 @@ class CustomerCreate(BaseModel):
     full_name: str
     phone_number: str
     address: Optional[str] = ""
-    initial_debt: Optional[float] = 0.0  # Umeongezwa hapa kusoma deni la awali
+    initial_debt: Optional[float] = 0.0
 
 class ProductCreate(BaseModel):
     product_name: str
@@ -636,6 +636,11 @@ def process_cart_sale(checkout: CartCheckoutModel):
     except Exception as e:
         raise HTTPException(status_code=400, detail=str(e))
 
+# Hii ndiyo njia ya mkato (Alias Endpoint) inayozuia 404 Not Found kwa /api/sales/save
+@app.post("/api/sales/save")
+def save_sale_alias(checkout: CartCheckoutModel):
+    return process_cart_sale(checkout)
+
 @app.get("/api/pos/sales")
 def get_bar_sales():
     if not supabase:
@@ -656,11 +661,9 @@ def add_customer(customer: CustomerCreate):
         addr = customer.address or "N/A"
         initial_debt = customer.initial_debt or 0.0
 
-        # Angalia kama mteja yupo tayari kwenye database
         existing = supabase.table("customers").select("*").ilike("full_name", clean_name).execute()
         
         if existing.data:
-            # Kama yupo, jumuisha deni lake la awali na deni lililopo sasa
             cust_record = existing.data[0]
             c_id = cust_record["id"]
             current_total_debt = float(cust_record.get("total_debt", 0) or 0)
@@ -673,7 +676,6 @@ def add_customer(customer: CustomerCreate):
             }
             res = supabase.table("customers").update(update_data).eq("id", c_id).execute()
         else:
-            # Kama hayupo, msajili mpya pamoja na deni lake la awali
             cust_dict = {
                 "full_name": clean_name,
                 "phone_number": phone,
