@@ -182,9 +182,7 @@
         .financial-card { background: #f8fafc; border: 1px solid #e2e8f0; padding: 12px 16px; border-radius: 8px; font-size: 13px; font-weight: 600; display: flex; flex-direction: column; gap: 4px; }
         .financial-card input { padding: 6px 8px; border: 1px solid #cbd5e1; border-radius: 6px; font-size: 13px; width: 100%; }
         
-        /* PROFESSIONAL CARDS LAYOUT */
         .cards-wrapper { display: flex; flex-direction: column; gap: 12px; margin-bottom: 16px; }
-        
         .row-3-cards { display: grid; grid-template-columns: repeat(3, 1fr); gap: 12px; }
         .row-4-cards { display: grid; grid-template-columns: repeat(4, 1fr); gap: 12px; }
 
@@ -663,7 +661,6 @@
                             <button onclick="saveAllStockChanges()" id="btn-save-all-stock" class="hidden" style="padding: 10px 20px; background: #059669; color: white; border: none; border-radius: 8px; cursor: pointer; font-size: 14px; font-weight: bold; box-shadow: 0 4px 6px rgba(5, 150, 105, 0.2);">💾 Hifadhi Kila Kitu (Save All)</button>
                         </div>
 
-                        <!-- Dedicated Scroll Container for Stock Check Table -->
                         <div class="table-scroll-container">
                             <table id="stock-check-table">
                                 <thead>
@@ -698,7 +695,6 @@
                             </div>
                         </div>
 
-                        <!-- 3 Summary Cards -->
                         <div class="grid-3" style="gap: 16px; margin-bottom: 16px;">
                             <div class="financial-card" style="background: #f8fafc; border-left: 4px solid #2563eb;">
                                 <span style="color: #64748b; font-size: 11px; text-transform: uppercase;">Jumla ya Manunuzi (Total Cost)</span>
@@ -714,7 +710,6 @@
                             </div>
                         </div>
 
-                        <!-- Dedicated Scroll Container for Stock History Table -->
                         <div class="table-scroll-container" style="max-height: 380px;">
                             <table id="stock-history-table">
                                 <thead>
@@ -945,7 +940,7 @@
         let cartItems = [];
         let storeCartItems = [];
         let fridgeCartItems = [];
-        let fridgeSavedStores = {}; // Holds items per fridge
+        let fridgeSavedStores = {};
         
         let currentActivePendingBillId = null;
 
@@ -953,7 +948,7 @@
             "Umeme & Maji", "Usafiri & Usafishaji", "Vibarua & Mishahara", "Matumizi Mengineyo"
         ];
 
-        document.addEventListener('DOMContentLoaded', () => {
+        document.addEventListener('DOMContentLoaded', async () => {
             const todayStr = new Date().toISOString().split('T')[0];
             const d = new Date();
             const firstDayStr = new Date(d.getFullYear(), d.getMonth(), 1).toISOString().split('T')[0];
@@ -966,22 +961,14 @@
             if(document.getElementById('hist_start_date')) document.getElementById('hist_start_date').value = firstDayStr;
             if(document.getElementById('hist_end_date')) document.getElementById('hist_end_date').value = todayStr;
             
-            // LOAD SAVED INPUT VALUES FROM LOCALSTORAGE TO PREVENT DISAPPEARING DATA
             loadSavedCardsData();
 
-            const savedFridges = localStorage.getItem('kitengo_fridge_stores');
-            if(savedFridges) {
-                try { fridgeSavedStores = JSON.parse(savedFridges); } catch(e){}
-            }
-
-            const savedStoreItems = localStorage.getItem('kitengo_store_cart_items');
-            if(savedStoreItems) {
-                try { storeCartItems = JSON.parse(savedStoreItems); } catch(e){}
-            }
+            // Load Store Cart from Supabase or Fallback
+            await loadStoreCartFromCloud();
+            await loadFridgesCartsFromCloud();
 
             initExpenseCategories();
             loadProductsCache();
-            renderStoreCart();
         });
 
         function saveCardsDataToStorage() {
@@ -1015,7 +1002,6 @@
             }
         }
 
-        // ENSURE NO NEGATIVE NUMBERS GLOBALLY
         function enforceNonNegative(input) {
             if(input.value !== '' && parseFloat(input.value) < 0) {
                 input.value = 0;
@@ -1146,7 +1132,7 @@
                 }
 
                 const stockContainer = document.getElementById('stock-restricted-container');
-                if(!canManageStock) {
+                if(!canManageStock && stockContainer) {
                     stockContainer.innerHTML = `<div class="card" style="grid-column: span 2; background: #fef2f2; border: 1px solid #fecaca; color: #991b1b; text-align: center; padding: 20px;">
                         ⚠️ Huna ruhusa ya kusajili bidhaa mpya au kuongeza stock. Tafadhali muombe Admin akuruhusu kwenye orodha ya watumiaji.
                     </div>`;
@@ -1174,8 +1160,8 @@
             if(tab === 'pos') { loadPendingBills(); }
             if(tab === 'stock-check') { loadStockCheckData(); loadStockHistory(); }
             if(tab === 'stock-manage') { loadProductsCache(); }
-            if(tab === 'store') { loadProductsCache(); renderStoreCart(); }
-            if(tab === 'fridges') { loadProductsCache(); handleFridgeSelectionChange(); }
+            if(tab === 'store') { loadProductsCache(); loadStoreCartFromCloud(); }
+            if(tab === 'fridges') { loadProductsCache(); loadFridgesCartsFromCloud(); }
             if(tab === 'customers') loadCustomers();
             if(tab === 'ledger') loadLedger();
             if(tab === 'users') { loadUsersList(); loadPendingApprovals(); }
@@ -1183,7 +1169,27 @@
             if(tab === 'expenses') filterExpenses();
         }
 
-        // STORE POS LOGIC
+        // --- STORE POS CLOUD SYNC ---
+        async function loadStoreCartFromCloud() {
+            try {
+                const res = await apiCall('/api/fridge-store/cart/get/Store');
+                if(res.data) {
+                    storeCartItems = res.data;
+                    renderStoreCart();
+                }
+            } catch(e) { console.error(e); }
+        }
+
+        async function saveStoreCartToCloud() {
+            try {
+                await apiCall('/api/fridge-store/cart/save', {
+                    method: 'POST',
+                    headers: {'Content-Type': 'application/json'},
+                    body: JSON.stringify({ location_name: 'Store', items: storeCartItems })
+                });
+            } catch(e) { console.error(e); }
+        }
+
         async function searchStoreProductsAutocomplete(query) {
             const dropdown = document.getElementById('store-product-dropdown');
             if(!query || query.length < 1) { dropdown.classList.add('hidden'); return; }
@@ -1213,7 +1219,7 @@
             document.getElementById('store-product-dropdown').classList.add('hidden');
         }
 
-        function addStoreItemToCart() {
+        async function addStoreItemToCart() {
             const pname = toProperCase(document.getElementById('store_product_search').value);
             const qty = parseInt(document.getElementById('store_qty').value) || 0;
             if(!pname) { alert('Tafuta bidhaa kwanza!'); return; }
@@ -1233,11 +1239,11 @@
             document.getElementById('store_qty').value = '1';
             selectedStorePrice = 0;
             
-            localStorage.setItem('kitengo_store_cart_items', JSON.stringify(storeCartItems));
+            await saveStoreCartToCloud();
             renderStoreCart();
         }
 
-        function updateStoreItemLive(idx) {
+        async function updateStoreItemLive(idx) {
             const qtyInput = document.getElementById(`store_item_qty_${idx}`);
             const priceInput = document.getElementById(`store_item_price_${idx}`);
             
@@ -1258,7 +1264,7 @@
                 totalCell.innerText = 'TZS ' + sub.toLocaleString();
             }
 
-            localStorage.setItem('kitengo_store_cart_items', JSON.stringify(storeCartItems));
+            await saveStoreCartToCloud();
 
             let grandTotal = 0;
             storeCartItems.forEach(item => {
@@ -1267,7 +1273,7 @@
             document.getElementById('store-grand-total').innerText = 'TZS ' + grandTotal.toLocaleString();
         }
 
-        function updateStoreCartQty(idx, change) {
+        async function updateStoreCartQty(idx, change) {
             if(storeCartItems[idx]) {
                 storeCartItems[idx].quantity += change;
                 if(storeCartItems[idx].quantity < 0) storeCartItems[idx].quantity = 0;
@@ -1276,7 +1282,7 @@
                 }
             }
             
-            localStorage.setItem('kitengo_store_cart_items', JSON.stringify(storeCartItems));
+            await saveStoreCartToCloud();
             renderStoreCart();
         }
 
@@ -1317,11 +1323,11 @@
             alert('✅ Bili ya Store imehifadhiwa vizuri!');
         }
 
-        function openStoreBill() {
+        async function openStoreBill() {
             const saved = localStorage.getItem('kitengo_saved_store_bill');
             if(!saved) { alert('Hakuna bili iliyohifadhiwa ya Store!'); return; }
             storeCartItems = JSON.parse(saved);
-            localStorage.setItem('kitengo_store_cart_items', JSON.stringify(storeCartItems));
+            await saveStoreCartToCloud();
             renderStoreCart();
             alert('📂 Bili iliyohifadhiwa ya Store imefunguliwa!');
         }
@@ -1340,7 +1346,31 @@
             alert(`✅ Rekodi ya Store ya TZS ${total.toLocaleString()} imewekwa kwenye Kadi ya Store!`);
         }
 
-        // FRIDGES POS LOGIC
+        // --- FRIDGES POS CLOUD SYNC ---
+        async function loadFridgesCartsFromCloud() {
+            const fridges = ['Fridge Coca', 'Freezer', 'Guinness'];
+            for(let f of fridges) {
+                try {
+                    const res = await apiCall('/api/fridge-store/cart/get/' + encodeURIComponent(f));
+                    if(res.data) {
+                        fridgeSavedStores[f] = res.data;
+                    }
+                } catch(e) { console.error(e); }
+            }
+            handleFridgeSelectionChange();
+        }
+
+        async function saveFridgeCartToCloud(locationName) {
+            try {
+                const items = fridgeSavedStores[locationName] || [];
+                await apiCall('/api/fridge-store/cart/save', {
+                    method: 'POST',
+                    headers: {'Content-Type': 'application/json'},
+                    body: JSON.stringify({ location_name: locationName, items: items })
+                });
+            } catch(e) { console.error(e); }
+        }
+
         function handleFridgeSelectionChange() {
             const currentFridge = document.getElementById('fridge_target_select').value;
             if(fridgeSavedStores[currentFridge]) {
@@ -1380,7 +1410,7 @@
             document.getElementById('fridge-product-dropdown').classList.add('hidden');
         }
 
-        function addFridgeItemToCart() {
+        async function addFridgeItemToCart() {
             const pname = toProperCase(document.getElementById('fridge_product_search').value);
             const qty = parseInt(document.getElementById('fridge_qty').value) || 0;
             if(!pname) { alert('Tafuta bidhaa kwanza!'); return; }
@@ -1402,12 +1432,12 @@
             
             const currentFridge = document.getElementById('fridge_target_select').value;
             fridgeSavedStores[currentFridge] = JSON.parse(JSON.stringify(fridgeCartItems));
-            localStorage.setItem('kitengo_fridge_stores', JSON.stringify(fridgeSavedStores));
+            await saveFridgeCartToCloud(currentFridge);
 
             renderFridgeCart();
         }
 
-        function updateFridgeItemLive(idx) {
+        async function updateFridgeItemLive(idx) {
             const qtyInput = document.getElementById(`fridge_item_qty_${idx}`);
             const priceInput = document.getElementById(`fridge_item_price_${idx}`);
             
@@ -1430,7 +1460,7 @@
 
             const currentFridge = document.getElementById('fridge_target_select').value;
             fridgeSavedStores[currentFridge] = JSON.parse(JSON.stringify(fridgeCartItems));
-            localStorage.setItem('kitengo_fridge_stores', JSON.stringify(fridgeSavedStores));
+            await saveFridgeCartToCloud(currentFridge);
 
             let grandTotal = 0;
             fridgeCartItems.forEach(item => {
@@ -1439,7 +1469,7 @@
             document.getElementById('fridge-grand-total').innerText = 'TZS ' + grandTotal.toLocaleString();
         }
 
-        function updateFridgeCartQty(idx, change) {
+        async function updateFridgeCartQty(idx, change) {
             if(fridgeCartItems[idx]) {
                 fridgeCartItems[idx].quantity += change;
                 if(fridgeCartItems[idx].quantity < 0) fridgeCartItems[idx].quantity = 0;
@@ -1450,7 +1480,7 @@
             
             const currentFridge = document.getElementById('fridge_target_select').value;
             fridgeSavedStores[currentFridge] = JSON.parse(JSON.stringify(fridgeCartItems));
-            localStorage.setItem('kitengo_fridge_stores', JSON.stringify(fridgeSavedStores));
+            await saveFridgeCartToCloud(currentFridge);
 
             renderFridgeCart();
         }
@@ -1493,14 +1523,14 @@
             alert(`✅ Bili ya ${currentFridge} imehifadhiwa vizuri!`);
         }
 
-        function openFridgeBill() {
+        async function openFridgeBill() {
             const currentFridge = document.getElementById('fridge_target_select').value;
             const saved = localStorage.getItem(`kitengo_saved_fridge_${currentFridge}`);
             if(!saved) { alert(`Hakuna bili iliyohifadhiwa ya ${currentFridge}!`); return; }
             fridgeCartItems = JSON.parse(saved);
             
             fridgeSavedStores[currentFridge] = JSON.parse(JSON.stringify(fridgeCartItems));
-            localStorage.setItem('kitengo_fridge_stores', JSON.stringify(fridgeSavedStores));
+            await saveFridgeCartToCloud(currentFridge);
             
             renderFridgeCart();
             alert(`📂 Bili iliyohifadhiwa ya ${currentFridge} imefunguliwa!`);
@@ -1609,7 +1639,7 @@
             }
 
             try {
-                const json = await apiCall('/api/expenses/add', {
+                const json = await apiCall('/api/expenses/save', {
                     method: 'POST',
                     headers: {'Content-Type': 'application/json'},
                     body: JSON.stringify({
@@ -1630,7 +1660,7 @@
         async function filterExpenses() {
             const selectedDate = document.getElementById('filter_exp_date').value;
             try {
-                const json = await apiCall('/api/transactions');
+                const json = await apiCall('/api/expenses/list');
                 let total = 0;
                 let tbody = document.getElementById('expenses-tbody');
                 if(!tbody) return;
@@ -1639,10 +1669,8 @@
 
                 if(json.data) {
                     json.data.forEach(t => {
-                        if(t.transaction_type && t.transaction_type.startsWith('Expense')) {
-                            if(!selectedDate || t.description.includes(selectedDate)) {
-                                matchedList.push(t);
-                            }
+                        if(!selectedDate || (t.created_at && t.created_at.includes(selectedDate))) {
+                            matchedList.push(t);
                         }
                     });
                 }
@@ -1653,10 +1681,10 @@
                         total += amt;
                         tbody.innerHTML += `
                             <tr>
-                                <td style="font-weight: 500;">${t.transaction_type}</td>
+                                <td style="font-weight: 500;">Matumizi</td>
                                 <td style="font-weight: bold; color: #b91c1c;">TZS ${amt.toLocaleString()}</td>
                                 <td>${t.description}</td>
-                                <td><span style="background: #e0f2fe; color: #0369a1; padding: 2px 6px; border-radius: 4px; font-size: 11px; font-weight: bold;">${t.recorded_by || 'Admin'}</span></td>
+                                <td><span style="background: #e0f2fe; color: #0369a1; padding: 2px 6px; border-radius: 4px; font-size: 11px; font-weight: bold;">Admin</span></td>
                             </tr>`;
                     });
                 } else {
@@ -2171,6 +2199,16 @@
                     headers: {'Content-Type': 'application/json'},
                     body: JSON.stringify(payload)
                 });
+
+                // Save Sale Record to Cloud (Supabase)
+                let totalCartAmt = 0;
+                cartItems.forEach(i => totalCartAmt += (i.quantity * i.unit_price));
+                await apiCall('/api/sales/save', {
+                    method: 'POST',
+                    headers: {'Content-Type': 'application/json'},
+                    body: JSON.stringify({ items: cartItems, total_amount: totalCartAmt, payment_method: paymentType })
+                });
+
                 let itemsReceiptStr = "";
                 json.items.forEach(it => {
                     itemsReceiptStr += `- ${it.clean_name} x ${it.quantity} @ ${Math.round(it.unit_price).toLocaleString()} = TZS ${Math.round(it.total_price).toLocaleString()}
@@ -2340,7 +2378,6 @@ Malipo: ${paymentType}
                 }
                 document.getElementById('stat-system-debts').innerText = 'TZS ' + totalSystemDebts.toLocaleString();
 
-                // Trigger live calculation of Jumla ya Mtaji instantly
                 calculateLiveJumlaYaMtaji();
 
             } catch(e) { console.error(e); }
